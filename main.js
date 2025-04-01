@@ -14,6 +14,7 @@ const { showBanner } = require("./core/banner.js");
 const localStorage = require("./localStorage.json");
 const { Wallet, ethers } = require("ethers");
 const { jwtDecode } = require("jwt-decode");
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 let REF_CODE = settings.REF_CODE;
 let numberPerRef = settings.NUMBER_PER_REF;
@@ -34,7 +35,10 @@ class ClientAPI {
     this.authInfos = authInfos;
     this.authInfo = { token: itemData.accessToken };
     this.localStorage = localStorage;
-    // this.wallet = new ethers.Wallet(this.itemData.privateKey);
+    this.wallet = new ethers.Wallet(this.itemData.privateKey);
+    // this.axiosInstance = axios.create({
+    //   timeout: 60000,
+    // });
     // this.w3 = new Web3(new Web3.providers.HttpProvider(settings.RPC_URL, proxy));
   }
 
@@ -108,7 +112,7 @@ class ClientAPI {
   }
 
   async log(msg, type = "info") {
-    const accountPrefix = `[ByData][Account ${this.accountIndex + 1}][${this.itemData.address}]`;
+    const accountPrefix = `[MonadScore][Account ${this.accountIndex + 1}][${this.itemData.address}]`;
     let ipPrefix = "[Local IP]";
     if (settings.USE_PROXY) {
       ipPrefix = this.proxyIP ? `[${this.proxyIP}]` : "[Unknown IP]";
@@ -164,30 +168,40 @@ class ClientAPI {
       ...this.headers,
     };
 
+    let config = {
+      headers,
+      timeout: 60000,
+    };
+
     // if (!isAuth) {
     //   headers["authorization"] = `Bearer ${this.token}`;
     // }
+    method = method.toLowerCase();
 
     let proxyAgent = null;
     if (settings.USE_PROXY) {
       proxyAgent = new HttpsProxyAgent(this.proxy);
+      config = {
+        ...config,
+        httpAgent: proxyAgent,
+        httpsAgent: proxyAgent,
+      };
     }
     let currRetries = 0;
     do {
       try {
         const response = await axios({
           method,
-          url: `${url}`,
-          headers,
-          timeout: 60000,
-          ...(proxyAgent ? { httpsAgent: proxyAgent } : {}),
-          ...(method.toLowerCase() != "get" ? { data: JSON.stringify(data || {}) } : {}),
+          url,
+          ...config,
+          ...(method.toLowerCase() != "get" ? { data: data } : {}),
         });
+
         if (response?.data?.data) return { status: response.status, success: true, data: response.data.data };
         return { success: true, data: response.data, status: response.status };
       } catch (error) {
         const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error.message;
-        // this.log(`Request failed: ${url} | ${error.message}...`, "warning");
+        this.log(`Request failed: ${url} | ${errorMessage}...`, "warning");
 
         if (error.message.includes("stream has been aborted")) {
           return { success: false, status: error.status, data: null, error: errorMessage };
@@ -231,35 +245,25 @@ class ClientAPI {
     return this.makeRequest(`${this.baseURL}/v1/account/login`, "post", payload, { isAuth: true });
   }
 
-  async getNonce() {
-    return this.makeRequest(
-      `${this.baseURL}/v1/account/nonce`,
-      "post",
-      {
-        walletAddress: this.itemData.address,
-      },
-      { isAuth: true }
-    );
-  }
-
   async startNode() {
-    return this.makeRequest(`${this.baseURL}/user/update-start-time`, "put", {
+    // const message = `Sign this message to verify ownership and start mining on monad score!\n\n${this.itemData.address} `;
+    // const sign = await this.wallet.signMessage(message);
+    return this.makeRequest(`${this.baseURL}/user/update-start-time`, "PUT", {
       wallet: this.itemData.address,
       startTime: Date.now(),
     });
   }
 
   async getUserData() {
-    return this.makeRequest(`${this.baseURL}/user`, "post", {
+    return this.makeRequest(`${this.baseURL}/user/login`, "post", {
       wallet: this.itemData.address,
-      invite: settings.REF_CODE,
     });
   }
 
-  async login() {
+  async register() {
     return this.makeRequest(`${this.baseURL}/user`, "post", {
       wallet: this.itemData.address,
-      invite: settings.REF_CODE,
+      invite: settings.REF_CODE || null,
     });
   }
 
@@ -273,15 +277,6 @@ class ClientAPI {
 
   async claimTask(payload) {
     return this.makeRequest(`${this.baseURL}/v1/social/claim`, "post", payload);
-  }
-
-  async sendMess(payload) {
-    //     {
-    //     "question": "hello",
-    //     "userId": "0xE2E7Ba18acE37Db3DD27648D4Fe699D466F5f48a",
-    //     "streaming": true
-    // }
-    return this.makeRequest(`${this.baseURL}/v1/defi-agent/answer`, "post", payload);
   }
 
   async getValidToken(isNew = false) {
@@ -306,9 +301,9 @@ class ClientAPI {
     return null;
   }
 
-  async handleSyncData() {
+  async handleSyncData(newUserData = null) {
     this.log(`Sync data...`);
-    let userData = { success: true, data: null, status: 0 },
+    let userData = { success: true, data: newUserData, status: 0 },
       retries = 0;
 
     do {
@@ -316,7 +311,12 @@ class ClientAPI {
       if (userData?.success) break;
       retries++;
     } while (retries < 1 && userData.status !== 400);
-    if (userData.success) {
+
+    if (userData.status == 500) {
+      userData = await this.register();
+    }
+
+    if (userData.success || newUserData) {
       const { user } = userData.data;
       this.log(
         `[Ref by: ${user.referredBy || REF_CODE}] Ref code: ${user.referralCode} | Ref success: ${user.referCounter} | Ref pedding: ${user.pendingReferCounter} | Days active: ${
@@ -325,7 +325,7 @@ class ClientAPI {
         "custom"
       );
     } else {
-      return this.log("Can't sync new data...skipping", "warning");
+      return this.log("Can't sync new data...", "warning");
     }
     return userData;
   }
@@ -372,24 +372,30 @@ class ClientAPI {
     }
   }
 
-  async handleStartNode(userData) {
-    const startTime = userData.user.startTime || null;
+  async handleStartNode(data) {
+    let userData = data?.user || data;
+    const startTime = userData?.startTime || null;
     const currentTime = Date.now(); // Lấy thời gian hiện tại
     const nineHoursInMillis = 9 * 60 * 60 * 1000; // 9 tiếng tính bằng mili giây
 
     if (currentTime - startTime >= nineHoursInMillis || !startTime) {
       const startNodeRes = await this.startNode();
-      if (!startNodeRes.success) return this.log("Can't start node...skipping", "warning");
+      if (!startNodeRes.success) {
+        this.log("Can't start node...skipping", "warning");
+        return data;
+      }
       this.log("Start node success", "success");
+      return startNodeRes.data;
     } else {
       this.log("Node still running...", "warning");
     }
+    return data;
   }
 
   async runAccount() {
     const accountIndex = this.accountIndex;
     this.session_name = this.itemData.address;
-    // this.authInfo = JSON.parse(this.authInfos[this.session_name] || "{}");
+    this.authInfo = JSON.parse(this.authInfos[this.session_name] || "{}");
     // this.token = this.authInfo?.token;
     this.#set_headers();
     if (settings.USE_PROXY) {
@@ -409,16 +415,14 @@ class ClientAPI {
     // this.token = token;
     // await this.login();
     const userData = await this.handleSyncData();
-    if (userData.success) {
-      if (settings.AUTO_TASK) {
-        await this.handleTask(userData.data);
-        // await sleep(1);
-      }
-      await sleep(1);
-      await this.handleStartNode(userData.data);
-    } else {
-      return this.log("Can't get use info...skipping", "error");
+    if (settings.AUTO_TASK && userData.data) {
+      await this.handleTask(userData.data);
+      // await sleep(1);
     }
+    await sleep(1);
+    const newUserData = await this.handleStartNode(userData.data);
+    saveJson(this.session_name, JSON.stringify(newUserData), "tokens.json");
+    // await this.handleSyncData(newUserData);
   }
 }
 
@@ -465,6 +469,7 @@ async function main() {
     const wallet = new ethers.Wallet(prvk);
     const item = {
       address: wallet.address,
+      privateKey: prvk,
     };
     new ClientAPI(item, index, proxies[index], resCheck.endpoint, {}).createUserAgent();
     return item;
