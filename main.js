@@ -201,7 +201,10 @@ class ClientAPI {
         return { success: true, data: response.data, status: response.status };
       } catch (error) {
         const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error.message;
-        this.log(`Request failed: ${url} | ${errorMessage}...`, "warning");
+        this.log(`Request failed: ${url} | Status: ${error.status} | ${errorMessage}...`, "warning");
+        if (errorMessage.includes("User not found")) {
+          return { success: false, data: null, status: 404, error: error.message };
+        }
 
         if (error.message.includes("stream has been aborted")) {
           return { success: false, status: error.status, data: null, error: errorMessage };
@@ -248,7 +251,7 @@ class ClientAPI {
   async startNode() {
     // const message = `Sign this message to verify ownership and start mining on monad score!\n\n${this.itemData.address} `;
     // const sign = await this.wallet.signMessage(message);
-    return this.makeRequest(`${this.baseURL}/user/update-start-time`, "PUT", {
+    return this.makeRequest(`${this.baseURL}/user/update-start-time`, "put", {
       wallet: this.itemData.address,
       startTime: Date.now(),
     });
@@ -303,16 +306,17 @@ class ClientAPI {
 
   async handleSyncData(newUserData = null) {
     this.log(`Sync data...`);
-    let userData = { success: true, data: newUserData, status: 0 },
+    let userData = { success: true, data: newUserData, status: 0, error: null },
       retries = 0;
 
     do {
       userData = await this.getUserData();
       if (userData?.success) break;
       retries++;
-    } while (retries < 1 && userData.status !== 400);
+    } while (retries < 1 && userData.status !== 400 && userData.status !== 404);
 
-    if (userData.status == 500) {
+    if (!userData.success && userData.status == 404) {
+      this.log(`User not found, trying register!`, "warning");
       userData = await this.register();
     }
 
