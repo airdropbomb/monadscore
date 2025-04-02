@@ -16,6 +16,7 @@ const { Wallet, ethers } = require("ethers");
 const { jwtDecode } = require("jwt-decode");
 const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
+let newAuthData = {};
 let REF_CODE = settings.REF_CODE;
 let numberPerRef = settings.NUMBER_PER_REF;
 
@@ -142,7 +143,7 @@ class ClientAPI {
     try {
       const proxyAgent = new HttpsProxyAgent(this.proxy);
       const response = await axios.get("https://api.ipify.org?format=json", { httpsAgent: proxyAgent });
-      if (response.status === 200) {
+      if (response.data.ip) {
         this.proxyIP = response.data.ip;
         return response.data.ip;
       } else {
@@ -200,8 +201,8 @@ class ClientAPI {
         if (response?.data?.data) return { status: response.status, success: true, data: response.data.data };
         return { success: true, data: response.data, status: response.status };
       } catch (error) {
-        const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error.message;
-        this.log(`Request failed: ${url} | Status: ${error.status} | ${errorMessage}...`, "warning");
+        const errorMessage = error?.response?.data || error.message;
+        this.log(`Request failed: ${url} | Status: ${error.status} | ${JSON.stringify(errorMessage || {})}...`, "error");
         if (errorMessage.includes("User not found")) {
           return { success: false, data: null, status: 404, error: error.message };
         }
@@ -238,10 +239,15 @@ class ClientAPI {
   }
 
   async auth() {
-    return this.makeRequest(`${this.baseURL}/user`, "post", {
-      wallet: this.itemData.address,
-      invite: settings.REF_CODE || null,
-    });
+    return this.makeRequest(
+      `${this.baseURL}/user`,
+      "post",
+      {
+        wallet: this.itemData.address,
+        invite: settings.REF_CODE || null,
+      },
+      { isAuth: true }
+    );
   }
 
   async startNode() {
@@ -286,7 +292,9 @@ class ClientAPI {
     if (!loginRes.success) return null;
     const newToken = loginRes.data;
     if (newToken.success && newToken?.token) {
-      saveJson(this.session_name, JSON.stringify(newToken), "tokens.json");
+      // newAuthData[this.session_name] = JSON.stringify(newToken);
+      // fs.writeFileSync("tokens.json", JSON.stringify(this.authInfos, null, 2));
+      await saveJson(this.session_name, JSON.stringify(newToken), "tokens.json");
       return newToken.token;
     }
     this.log("Can't get new token...", "warning");
@@ -468,6 +476,8 @@ async function main() {
   await sleep(1);
   while (true) {
     authInfos = require("./tokens.json");
+    // newAuthData = authInfos;
+    await sleep(1);
     let currentIndex = 0;
     const errors = [];
     while (currentIndex < data.length) {
@@ -523,7 +533,7 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
     }
-
+    // fs.writeFileSync("tokens.json", JSON.stringify(newAuthData, null, 2));
     await sleep(3);
     console.log(`=============${new Date().toLocaleString()} | Hoàn thành tất cả tài khoản | Chờ ${settings.TIME_SLEEP} phút=============`.magenta);
     showBanner();
