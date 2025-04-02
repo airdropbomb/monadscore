@@ -173,9 +173,9 @@ class ClientAPI {
       timeout: 60000,
     };
 
-    // if (!isAuth) {
-    //   headers["authorization"] = `Bearer ${this.token}`;
-    // }
+    if (!isAuth) {
+      headers["authorization"] = `Bearer ${this.token}`;
+    }
     method = method.toLowerCase();
 
     let proxyAgent = null;
@@ -238,14 +238,10 @@ class ClientAPI {
   }
 
   async auth() {
-    return null;
-    // const wallet = this.wallet;
-    // const nonceRes = await this.getNonce();
-    // if (!nonceRes.success) return { status: 500, success: false, error: "Can't get nonce" };
-
-    // const signedMessage = await wallet.signMessage(nonceRes.nonce);
-    const payload = { signature: "signedMessage", walletAddress: this.itemData.address };
-    return this.makeRequest(`${this.baseURL}/v1/account/login`, "post", payload, { isAuth: true });
+    return this.makeRequest(`${this.baseURL}/user`, "post", {
+      wallet: this.itemData.address,
+      invite: settings.REF_CODE || null,
+    });
   }
 
   async startNode() {
@@ -260,13 +256,6 @@ class ClientAPI {
   async getUserData() {
     return this.makeRequest(`${this.baseURL}/user/login`, "post", {
       wallet: this.itemData.address,
-    });
-  }
-
-  async register() {
-    return this.makeRequest(`${this.baseURL}/user`, "post", {
-      wallet: this.itemData.address,
-      invite: settings.REF_CODE || null,
     });
   }
 
@@ -292,15 +281,15 @@ class ClientAPI {
       return existingToken;
     }
 
-    // this.log("No found token or experied, trying get new token...", "warning");
-    // const loginRes = await this.auth();
-    // if (!loginRes.success) return null;
-    // const newToken = loginRes.data;
-    // if (newToken.success && newToken.data?.token) {
-    //   saveJson(this.session_name, JSON.stringify(newToken.data), "tokens.json");
-    //   return newToken.data.token;
-    // }
-    // this.log("Can't get new token...", "warning");
+    this.log("No found token or experied, trying get new token...", "warning");
+    const loginRes = await this.auth();
+    if (!loginRes.success) return null;
+    const newToken = loginRes.data;
+    if (newToken.success && newToken?.token) {
+      saveJson(this.session_name, JSON.stringify(newToken), "tokens.json");
+      return newToken.token;
+    }
+    this.log("Can't get new token...", "warning");
     return null;
   }
 
@@ -315,10 +304,9 @@ class ClientAPI {
       retries++;
     } while (retries < 1 && userData.status !== 400 && userData.status !== 404);
 
-    if (!userData.success && userData.status == 404) {
-      this.log(`User not found, trying register!`, "warning");
-      userData = await this.register();
-    }
+    // if (!userData.success && userData.status == 404) {
+    //   this.log(`User not found, trying register!`, "warning");
+    // }
 
     if (userData.success || newUserData) {
       const { user } = userData.data;
@@ -400,7 +388,7 @@ class ClientAPI {
     const accountIndex = this.accountIndex;
     this.session_name = this.itemData.address;
     this.authInfo = JSON.parse(this.authInfos[this.session_name] || "{}");
-    // this.token = this.authInfo?.token;
+    this.token = this.authInfo?.token;
     this.#set_headers();
     if (settings.USE_PROXY) {
       try {
@@ -414,10 +402,9 @@ class ClientAPI {
       await sleep(timesleep);
     }
 
-    // const token = await this.getValidToken();
-    // if (!token) return;
-    // this.token = token;
-    // await this.login();
+    const token = await this.getValidToken();
+    if (!token) return;
+    this.token = token;
     const userData = await this.handleSyncData();
     if (settings.AUTO_TASK && userData.data) {
       await this.handleTask(userData.data);
@@ -425,7 +412,7 @@ class ClientAPI {
     }
     await sleep(1);
     const newUserData = await this.handleStartNode(userData.data);
-    saveJson(this.session_name, JSON.stringify(newUserData), "tokens.json");
+    // saveJson(this.session_name, JSON.stringify(newUserData), "tokens.json");
     // await this.handleSyncData(newUserData);
   }
 }
