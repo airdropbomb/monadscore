@@ -1,6 +1,6 @@
 # ᝰ.ᐟ MonadScore
 
-Tool được phát triển bởi nhóm tele Airdrop Hunter Siêu Tốc (https://t.me/airdrophuntersieutoc)
+Tool modified by (https://t.me/airdropbombnode)
 
 ## 🚨 Attention Before Running MonadScore Cli Version
 
@@ -19,7 +19,7 @@ I am not `responsible` for the possibility of an account being `banned`!
 - Clone Repository
 
 ```bash
-git clone https://github.com/Hunga9k50doker/monadscore.git
+git clone https://github.com/airdropbomb/monadscore.git
 cd monadscore
 ```
 
@@ -43,7 +43,7 @@ nano .env
 nano proxy.txt
 ```
 
-- private key: how to get private key => join my channel: https://t.me/airdrophuntersieutoc
+- private key: how to get private key => join my channel: https://t.me/airdropbombnode
 
 ```bash
 nano privateKeys.txt
