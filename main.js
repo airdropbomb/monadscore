@@ -251,13 +251,34 @@ class ClientAPI {
   }
 
   async startNode() {
-    // const message = `Sign this message to verify ownership and start mining on monad score!\n\n${this.itemData.address} `;
-    // const sign = await this.wallet.signMessage(message);
-    return this.makeRequest(`${this.baseURL}/user/update-start-time`, "put", {
-      wallet: this.itemData.address,
-      startTime: Date.now(),
-    });
+  try {
+    // Message ကို sign လုပ်ဖို့
+    const message = `Sign this message to verify ownership and start mining on monad score!\n\n${this.itemData.address}`;
+    const sign = await this.wallet.signMessage(message);
+
+    // API request ထဲမှာ signature ကို ထည့်ပို့မယ်
+    const response = await this.makeRequest(
+      `${this.baseURL}/user/update-start-time`,
+      "put",
+      {
+        wallet: this.itemData.address,
+        startTime: Date.now(),
+        signature: sign, // Signature ကို API ထဲ ထည့်ပို့တယ်
+      }
+    );
+
+    if (!response.success) {
+      this.log("Failed to start node with signature", "error");
+      return null;
+    }
+
+    this.log("Node started successfully with wallet signature", "success");
+    return response.data;
+  } catch (error) {
+    this.log(`Error signing wallet or starting node: ${error.message}`, "error");
+    return null;
   }
+}
 
   async getUserData() {
     return this.makeRequest(`${this.baseURL}/user/login`, "post", {
