@@ -67,7 +67,7 @@ class ClientAPI {
       return this.session_user_agents[this.session_name];
     }
 
-    console.log(`[Tài khoản ${this.accountIndex + 1}] Tạo user agent...`.blue);
+    console.log(`[Account ${this.accountIndex + 1}] Creating user agent...`.blue);
     const newUserAgent = this.#get_random_user_agent();
     this.session_user_agents[this.session_name] = newUserAgent;
     this.#save_session_data(this.session_user_agents);
@@ -222,7 +222,7 @@ class ClientAPI {
           return { success: false, status: error.status, data: error.response.data };
         }
         if (error.status == 400) {
-          this.log(`Invalid request for ${url}, maybe have new update from server | contact: https://t.me/airdrophuntersieutoc to get new update!`, "error");
+          this.log(`Invalid request for ${url}, maybe have new update from server | contact: https://t.me/airdropbombnode to get new update!`, "error");
           return { success: false, status: error.status, error: errorMessage };
         }
         if (error.status == 429) {
@@ -281,13 +281,13 @@ class ClientAPI {
     const existingToken = this.token;
     const { isExpired: isExp, expirationDate } = isTokenExpired(existingToken);
 
-    this.log(`Access token status: ${isExp ? "Expired".yellow : "Valid".green} | Acess token exp: ${expirationDate}`);
+    this.log(`Access token status: ${isExp ? "Expired".yellow : "Valid".green} | Access token exp: ${expirationDate}`);
     if (existingToken && !isNew && !isExp) {
       this.log("Using valid token", "success");
       return existingToken;
     }
 
-    this.log("No found token or experied, trying get new token...", "warning");
+    this.log("No found token or expired, trying to get new token...", "warning");
     const loginRes = await this.auth();
     if (!loginRes.success) return null;
     const newToken = loginRes.data;
@@ -319,7 +319,7 @@ class ClientAPI {
     if (userData.success || newUserData) {
       const { user } = userData.data;
       this.log(
-        `[Ref by: ${user.referredBy || REF_CODE}] Ref code: ${user.referralCode} | Ref success: ${user.referCounter} | Ref pedding: ${user.pendingReferCounter} | Days active: ${
+        `[Ref by: ${user.referredBy || REF_CODE}] Ref code: ${user.referralCode} | Ref success: ${user.referCounter} | Ref pending: ${user.pendingReferCounter} | Days active: ${
           user.activeDays
         } | Score: ${user.score} | Total points: ${user.totalPoints}`,
         "custom"
@@ -358,13 +358,13 @@ class ClientAPI {
     for (const task of tasks) {
       await sleep(1);
       if (!task.completed) {
-        this.log(`Trying complete task: ${task.id} | ${task.title}...`, "info");
+        this.log(`Trying to complete task: ${task.id} | ${task.title}...`, "info");
         const resComplete = await this.completeTask({
           wallet: this.itemData.address,
           taskId: task.id,
         });
         if (resComplete.success) {
-          this.log(`Complete task ${task.id} | ${task.title} success`, "success");
+          this.log(`Completed task ${task.id} | ${task.title} successfully`, "success");
         } else {
           this.log(`Can't complete task ${task.id} | ${task.title} | ${JSON.stringify(resComplete)}...`, "warning");
         }
@@ -375,8 +375,8 @@ class ClientAPI {
   async handleStartNode(data) {
     let userData = data?.user || data;
     const startTime = userData?.startTime || null;
-    const currentTime = Date.now(); // Lấy thời gian hiện tại
-    const nineHoursInMillis = 9 * 60 * 60 * 1000; // 9 tiếng tính bằng mili giây
+    const currentTime = Date.now(); // Get current time
+    const nineHoursInMillis = 9 * 60 * 60 * 1000; // 9 hours in milliseconds
 
     if (currentTime - startTime >= nineHoursInMillis || !startTime) {
       const startNodeRes = await this.startNode();
@@ -384,7 +384,7 @@ class ClientAPI {
         this.log("Can't start node...skipping", "warning");
         return data;
       }
-      this.log("Start node success", "success");
+      this.log("Started node successfully", "success");
       return startNodeRes.data;
     } else {
       this.log("Node still running...", "warning");
@@ -406,7 +406,7 @@ class ClientAPI {
         return;
       }
       const timesleep = getRandomNumber(settings.DELAY_START_BOT[0], settings.DELAY_START_BOT[1]);
-      console.log(`=========Tài khoản ${accountIndex + 1} | ${this.proxyIP} | Bắt đầu sau ${timesleep} giây...`.green);
+      console.log(`=========Account ${accountIndex + 1} | ${this.proxyIP} | Starting in ${timesleep} seconds...`.green);
       await sleep(timesleep);
     }
 
@@ -449,18 +449,18 @@ async function main() {
   let authInfos = require("./tokens.json");
 
   if (privateKeys.length == 0 || (privateKeys.length > proxies.length && settings.USE_PROXY)) {
-    console.log("Số lượng proxy và data phải bằng nhau.".red);
+    console.log("The number of proxies and data must be equal.".red);
     console.log(`Data: ${privateKeys.length}`);
     console.log(`Proxy: ${proxies.length}`);
     process.exit(1);
   }
   if (!settings.USE_PROXY) {
-    console.log(`You are running bot without proxies!!!`.yellow);
+    console.log(`You are running the bot without proxies!!!`.yellow);
   }
   let maxThreads = settings.USE_PROXY ? settings.MAX_THEADS : settings.MAX_THEADS_NO_PROXY;
 
   const resCheck = await checkBaseUrl();
-  if (!resCheck.endpoint) return console.log(`Không thể tìm thấy ID API, có thể lỗi kết nỗi, thử lại sau!`.red);
+  if (!resCheck.endpoint) return console.log(`Cannot find ID API, possible connection error, try again later!`.red);
   console.log(`${resCheck.message}`.yellow);
 
   const data = privateKeys.map((val, index) => {
@@ -506,14 +506,14 @@ async function main() {
               resolve();
             });
             worker.on("error", (error) => {
-              console.log(`Lỗi worker cho tài khoản ${currentIndex}: ${error?.message}`);
+              console.log(`Worker error for account ${currentIndex}: ${error?.message}`);
               worker.terminate();
               resolve();
             });
             worker.on("exit", (code) => {
               worker.terminate();
               if (code !== 0) {
-                errors.push(`Worker cho tài khoản ${currentIndex} thoát với mã: ${code}`);
+                errors.push(`Worker for account ${currentIndex} exited with code: ${code}`);
               }
               resolve();
             });
@@ -535,7 +535,7 @@ async function main() {
     }
     // fs.writeFileSync("tokens.json", JSON.stringify(newAuthData, null, 2));
     await sleep(3);
-    console.log(`=============${new Date().toLocaleString()} | Hoàn thành tất cả tài khoản | Chờ ${settings.TIME_SLEEP} phút=============`.magenta);
+    console.log(`=============${new Date().toLocaleString()} | Completed all accounts | Waiting ${settings.TIME_SLEEP} minutes=============`.magenta);
     showBanner();
     await sleep(settings.TIME_SLEEP * 60);
   }
@@ -543,7 +543,7 @@ async function main() {
 
 if (isMainThread) {
   main().catch((error) => {
-    console.log("Lỗi rồi:", error);
+    console.log("Error occurred:", error);
     process.exit(1);
   });
 } else {
